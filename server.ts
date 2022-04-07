@@ -5,7 +5,14 @@ import cors from "cors";
 import { Server } from "socket.io";
 import { getRoomValuesById } from "./utills";
 import { db } from "./db";
-import { IRoomsPostRequestBody, Messages, Users } from "./types";
+import {
+  IRoomsPostRequestBody,
+  Message,
+  Messages,
+  Room,
+  Users,
+  FormData,
+} from "./types";
 
 dotenv.config();
 
@@ -71,7 +78,39 @@ io.on("connection", (socket) => {
     console.log("User disconnected " + socket.id);
   });
 
-  setInterval(() => socket.emit("time", new Date().toTimeString()), 1000);
+  socket.on("disconnect", (reason) => {
+    console.log("disconnect", socket.id, "reason - ", reason);
+
+    db.forEach((value, roomId) => {
+      if ((value.get("users") as Users).delete(socket.id)) {
+        const users = Array.from((value.get("users") as Users).values());
+        socket.broadcast.to(roomId).emit("ROOM:SET_USERS", users);
+      }
+    });
+  });
+
+  socket.on("ROOM:JOIN", ({ roomId, userName }: FormData) => {
+    socket.join(roomId);
+
+    const roomRef = db.get(roomId) as Room;
+    const usersRef = roomRef.get("users") as Users;
+    usersRef.set(socket.id, userName);
+
+    const users = Array.from(usersRef.values());
+    socket.broadcast.to(roomId).emit("ROOM:SET_USERS", users);
+  });
+
+  socket.on("ROOM:NEW_MESSAGE", ({ roomId, userName, text }) => {
+    const roomRef = db.get(roomId) as Room;
+    const messagesRef = roomRef.get("messages") as Messages;
+    const newMessage: Message = {
+      userName,
+      text,
+    };
+
+    messagesRef.push(newMessage);
+    socket.broadcast.to(roomId).emit("ROOM:NEW_MESSAGE", newMessage);
+  });
 });
 
 server.listen(PORT, () => {
