@@ -12,7 +12,7 @@ const io = new Server(server, {
 });
 
 app.get("/", (_, res) => {
-  res.send("<h1>Hello world!</h1>");
+  res.sendStatus(201);
 });
 
 io.on("connection", (socket) => {
